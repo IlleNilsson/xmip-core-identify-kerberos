@@ -1,12 +1,6 @@
 # xmip-core-identify-kerberos
 
-Identify by kerberos: reads a ticket's client principal, unverified; a transport-layer identifier whose claim is passed. A technology of
-[xmip-core-identify](https://github.com/IlleNilsson/xmip-core-identify).
-
-Declared and not yet written; `architecture.toml` carries the maturity. When
-it is written it implements `TransportIdentifier`, one mechanism at one gate (ADR-0050).
-What it may depend on is `repository-model.md` section 4 and ADR-0044: its
-capability, and no sibling.
+Identify by kerberos: the ticket a Negotiate authorization offers, presented by the realm and service it is for because the client principal is sealed; a transport-layer claim, passed. A technology of [xmip-core-identify](https://github.com/IlleNilsson/xmip-core-identify).
 
 ## Toolchain
 
