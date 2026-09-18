@@ -209,11 +209,16 @@ pub(crate) mod tests {
     /// An AP-REQ for `HTTP/xmip.example@EXAMPLE.COM`, as a KDC's ticket and
     /// a client's authenticator would make it.
     pub(crate) fn ap_req() -> Vec<u8> {
-        let names = [
-            tlv(GENERAL_STRING, b"HTTP"),
-            tlv(GENERAL_STRING, b"xmip.example"),
-        ]
-        .concat();
+        ap_req_for(&["HTTP", "xmip.example"])
+    }
+
+    /// An AP-REQ for a service of these components, in `EXAMPLE.COM`.
+    pub(crate) fn ap_req_for(service: &[&str]) -> Vec<u8> {
+        let names = service
+            .iter()
+            .map(|component| tlv(GENERAL_STRING, component.as_bytes()))
+            .collect::<Vec<_>>()
+            .concat();
         let sname = tlv(
             SEQUENCE,
             &[
