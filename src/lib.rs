@@ -35,6 +35,13 @@
 //! by. The verified value the second gate answers with is the client
 //! principal, and that — not this — is what resolves to a Party.
 //!
+//! The same service principal is written beside the value as
+//! `principal.service`, in the capability's canonical form — the host and the
+//! realm in lower case — so it compares with a service principal any other
+//! mechanism carried (ADR-0054). A ticket for a name that is not one, a single
+//! component with no host, gains no such evidence; and the client principal,
+//! sealed, gains no `principal.user` here.
+//!
 //! A `Negotiate` value carrying an NTLM message is `ntlm`'s and presents
 //! nothing here, as does a SPNEGO continuation with no token in it. A token
 //! that is Kerberos and cannot be read is an error saying why. Only a pushed
@@ -49,7 +56,9 @@ pub mod der;
 use ap_req::ApReq;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use identify::{IdentifyError, Presented, StreamArrival, TransportIdentifier};
+use identify::{
+    IdentifyError, Presented, ServicePrincipalName, StreamArrival, TransportIdentifier, principal,
+};
 use xcore::{Arriving, Mechanism};
 
 /// The property read: the HTTP `Authorization` header.
@@ -115,6 +124,9 @@ impl TransportIdentifier for Kerberos {
         if let Some(version) = request.key_version {
             claim = claim.with_evidence(KEY_VERSION, version.to_string());
         }
+        if let Some(service) = ServicePrincipalName::parse(&claim.value) {
+            claim = claim.with_evidence(principal::SERVICE, service.to_string());
+        }
 
         Ok(Some(claim))
     }
@@ -123,7 +135,7 @@ impl TransportIdentifier for Kerberos {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ap_req::tests::{kerberos_token, spnego_token};
+    use crate::ap_req::tests::{ap_req_for, kerberos_token, spnego_token};
     use stream::Stream;
     use xcore::{Established, Layer, StreamId};
 
@@ -185,6 +197,49 @@ mod tests {
         let printed = format!("{claim:?}");
         assert!(!printed.contains("alice"), "nothing read the sealed part");
         assert!(!printed.contains(&token), "the token is not printed");
+    }
+
+    fn presented_for(service: &[&str]) -> Presented {
+        let stream = stream();
+        let token = STANDARD.encode(ap_req_for(service));
+        let facts = authorization(format!("Negotiate {token}"));
+        let arrival = StreamArrival::new(&stream, Arriving::Pushed, "https://xmip/in", &facts);
+
+        Kerberos.identify(&arrival).expect("read").expect("a claim")
+    }
+
+    #[test]
+    fn the_service_principal_is_written_beside_the_value_in_canonical_form() {
+        let claim = presented_for(&["HTTP", "Xmip.Example"]);
+
+        assert_eq!(
+            claim.value, "HTTP/Xmip.Example@EXAMPLE.COM",
+            "as the ticket"
+        );
+        assert!(claim.evidence.contains(&(
+            principal::SERVICE.to_string(),
+            "HTTP/xmip.example@example.com".to_string()
+        )));
+        assert!(
+            claim
+                .evidence
+                .iter()
+                .all(|(name, _)| name != principal::USER),
+            "the client principal is sealed"
+        );
+    }
+
+    #[test]
+    fn a_ticket_for_a_name_with_no_host_gains_no_principal_evidence() {
+        let claim = presented_for(&["xmip"]);
+
+        assert_eq!(claim.value, "xmip@EXAMPLE.COM");
+        assert!(
+            claim
+                .evidence
+                .iter()
+                .all(|(name, _)| name != principal::SERVICE && name != principal::USER)
+        );
     }
 
     #[test]
