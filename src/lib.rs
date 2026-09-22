@@ -273,7 +273,12 @@ mod tests {
         let facts = authorization(format!("negotiate {}", STANDARD.encode(cut)));
         let arrival = StreamArrival::new(&stream, Arriving::Pushed, "https://xmip/in", &facts);
         let failure = Kerberos.identify(&arrival).expect_err("truncated");
-        assert_eq!(failure.to_string(), "the DER ends inside an element");
+        assert!(
+            failure
+                .to_string()
+                .starts_with("an element ends inside its contents"),
+            "{failure}"
+        );
     }
 
     #[test]
