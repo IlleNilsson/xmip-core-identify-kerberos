@@ -19,6 +19,8 @@ path = "src/lib.rs"
 # there. The mechanism it reads is declared once in xmip-core (ADR-0050).
 identify = { package = "xmip-core-identify", git = "https://github.com/IlleNilsson/xmip-core-identify", branch = "main" }
 xcore = { package = "xmip-core", git = "https://github.com/IlleNilsson/xmip-core", branch = "main" }
+# X.690: the token is DER, read with the estate's one reader.
+asn1 = { package = "xmip-core-asn1", git = "https://github.com/IlleNilsson/xmip-core-asn1", branch = "main" }
 # RFC 4648 base64, for the token an Authorization: Negotiate header carries.
 base64 = "0.22"
 
