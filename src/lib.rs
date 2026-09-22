@@ -56,13 +56,12 @@ pub mod der;
 use ap_req::ApReq;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use identify::authorization::{self, AUTHORIZATION};
 use identify::{
     IdentifyError, Presented, ServicePrincipalName, StreamArrival, TransportIdentifier, principal,
 };
 use xcore::{Arriving, Mechanism};
 
-/// The property read: the HTTP `Authorization` header.
-pub const AUTHORIZATION: &str = "http.header.authorization";
 /// The evidence name carrying the ticket's realm.
 pub const REALM: &str = "kerberos.realm";
 /// The evidence name carrying the service the ticket is for, without realm.
@@ -83,17 +82,6 @@ pub const AP_REQ_PROOF: &str = "kerberos.ap-req";
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Kerberos;
 
-/// The base64 after `Negotiate`, or `None` for any other scheme.
-fn negotiate(authorization: &str) -> Option<&str> {
-    let (scheme, token) = authorization
-        .trim()
-        .split_once(|character: char| character.is_ascii_whitespace())?;
-
-    scheme
-        .eq_ignore_ascii_case("negotiate")
-        .then(|| token.trim())
-}
-
 impl TransportIdentifier for Kerberos {
     fn mechanism(&self) -> Mechanism {
         xcore::mechanism::kerberos()
@@ -104,7 +92,10 @@ impl TransportIdentifier for Kerberos {
             return Ok(None);
         }
 
-        let Some(token) = arrival.property(AUTHORIZATION).and_then(negotiate) else {
+        let Some(token) = arrival
+            .property(AUTHORIZATION)
+            .and_then(|value| authorization::under(value, "negotiate"))
+        else {
             return Ok(None);
         };
 
