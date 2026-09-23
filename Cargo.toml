@@ -20,7 +20,7 @@ path = "src/lib.rs"
 identify = { package = "xmip-core-identify", git = "https://github.com/IlleNilsson/xmip-core-identify", branch = "main" }
 xcore = { package = "xmip-core", git = "https://github.com/IlleNilsson/xmip-core", branch = "main" }
 # X.690: the token is DER, read with the estate's one reader.
-asn1 = { package = "xmip-core-asn1", git = "https://github.com/IlleNilsson/xmip-core-asn1", branch = "main" }
+asn1 = { package = "xmip-core-library-asn1", git = "https://github.com/IlleNilsson/xmip-core-library-asn1", branch = "main" }
 # RFC 4648 base64, for the token an Authorization: Negotiate header carries.
 base64 = "0.22"
 
