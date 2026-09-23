@@ -1,6 +1,6 @@
 //! The DER a Kerberos token is, named the way RFC 4120 names it.
 //!
-//! The reader is the estate's one, `xmip-core-asn1`; this carried its own
+//! The reader is the estate's one, `xmip-core-library-asn1`; this carried its own
 //! until 2026-09-22, as did `authenticate/kerberos` for the sealed part of
 //! the same token. What stays here is Kerberos's vocabulary: every field of
 //! a Kerberos `SEQUENCE` is explicitly tagged and constructed, so a context
