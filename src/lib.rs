@@ -50,7 +50,8 @@
 //! the same token with.
 //!
 //! Property this technology reads: `http.header.authorization`.
-use identify::authorization::{self, AUTHORIZATION};
+use context::property::HTTP_AUTHORIZATION;
+use identify::authorization;
 use identify::evidence;
 use identify::kerberos::Ticket;
 use identify::{
@@ -84,7 +85,7 @@ impl TransportIdentifier for Kerberos {
         }
 
         let Some(token) = arrival
-            .property(AUTHORIZATION)
+            .property(HTTP_AUTHORIZATION)
             .and_then(|value| authorization::under(value, "negotiate"))
         else {
             return Ok(None);
@@ -139,7 +140,7 @@ mod tests {
     }
 
     fn authorization(value: String) -> Vec<(String, String)> {
-        vec![(AUTHORIZATION.to_string(), value)]
+        vec![(HTTP_AUTHORIZATION.to_string(), value)]
     }
 
     fn negotiate_header() -> (String, Vec<(String, String)>) {
