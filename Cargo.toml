@@ -18,6 +18,8 @@ path = "src/lib.rs"
 # (repository-model.md): the identifier trait, the arrival and the claim live
 # there. The mechanism it reads is declared once in xmip-core (ADR-0050).
 identify = { package = "xmip-core-identify", git = "https://github.com/IlleNilsson/xmip-core-identify", branch = "main" }
+# The names the transport writes on the arrival (context::property).
+context = { package = "xmip-core-context", git = "https://github.com/IlleNilsson/xmip-core-context", branch = "main" }
 xcore = { package = "xmip-core", git = "https://github.com/IlleNilsson/xmip-core", branch = "main" }
 # The estate's base 64 (RFC 4648), which the Negotiate token travels in.
 codec = { package = "xmip-core-library-codec", git = "https://github.com/IlleNilsson/xmip-core-library-codec", branch = "main" }
