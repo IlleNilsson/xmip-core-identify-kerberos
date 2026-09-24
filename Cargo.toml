@@ -19,10 +19,8 @@ path = "src/lib.rs"
 # there. The mechanism it reads is declared once in xmip-core (ADR-0050).
 identify = { package = "xmip-core-identify", git = "https://github.com/IlleNilsson/xmip-core-identify", branch = "main" }
 xcore = { package = "xmip-core", git = "https://github.com/IlleNilsson/xmip-core", branch = "main" }
-# X.690: the token is DER, read with the estate's one reader.
-asn1 = { package = "xmip-core-library-asn1", git = "https://github.com/IlleNilsson/xmip-core-library-asn1", branch = "main" }
-# RFC 4648 base64, for the token an Authorization: Negotiate header carries.
-base64 = "0.22"
+# The estate's base 64 (RFC 4648), which the Negotiate token travels in.
+codec = { package = "xmip-core-library-codec", git = "https://github.com/IlleNilsson/xmip-core-library-codec", branch = "main" }
 
 [dev-dependencies]
 # The Stream an arrival carries, for the tests that build one.
