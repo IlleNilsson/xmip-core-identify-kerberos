@@ -45,20 +45,16 @@
 //! A `Negotiate` value carrying an NTLM message is `ntlm`'s and presents
 //! nothing here, as does a SPNEGO continuation with no token in it. A token
 //! that is Kerberos and cannot be read is an error saying why. Only a pushed
-//! arrival carries a passed claim. The DER reading is [`der`], as small as
-//! the token needs; the token's shape is [`ap_req`].
+//! arrival carries a passed claim. The token is read by the capability's
+//! `identify::kerberos::Ticket`, the one reader `authenticate/kerberos` reads
+//! the same token with.
 //!
 //! Property this technology reads: `http.header.authorization`.
-
-pub mod ap_req;
-pub mod der;
-
-use ap_req::ApReq;
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
 use identify::authorization::{self, AUTHORIZATION};
+use identify::evidence;
+use identify::kerberos::Ticket;
 use identify::{
-    IdentifyError, Presented, ServicePrincipalName, StreamArrival, TransportIdentifier, principal,
+    IdentifyError, Presented, ServicePrincipalName, StreamArrival, TransportIdentifier,
 };
 use xcore::{Arriving, Mechanism};
 
@@ -70,13 +66,8 @@ pub const SERVICE: &str = "kerberos.service";
 pub const ENCRYPTION_TYPE: &str = "kerberos.etype";
 /// The evidence name carrying the service key's version.
 pub const KEY_VERSION: &str = "kerberos.kvno";
-/// The evidence name saying where the client principal is.
-pub const CLIENT: &str = "kerberos.client";
-/// What [`CLIENT`] says: inside the sealed parts, unread.
+/// What [`evidence::KERBEROS_CLIENT`] says: inside the sealed parts, unread.
 pub const SEALED: &str = "sealed";
-/// The proof name the base64 token rides under, read by
-/// `authenticate/kerberos`.
-pub const AP_REQ_PROOF: &str = "kerberos.ap-req";
 
 /// Reads the Kerberos ticket a `Negotiate` authorization offers.
 #[derive(Clone, Copy, Debug, Default)]
@@ -99,10 +90,9 @@ impl TransportIdentifier for Kerberos {
             return Ok(None);
         };
 
-        let bytes = STANDARD
-            .decode(token)
+        let bytes = codec::base64::decode(token)
             .map_err(|_| IdentifyError::new("the Negotiate token is not base64"))?;
-        let Some(request) = ApReq::from_token(&bytes)? else {
+        let Some(request) = Ticket::from_negotiate(&bytes)? else {
             return Ok(None);
         };
 
@@ -110,13 +100,13 @@ impl TransportIdentifier for Kerberos {
             .with_evidence(REALM, &request.realm)
             .with_evidence(SERVICE, request.service.join("/"))
             .with_evidence(ENCRYPTION_TYPE, request.encryption_type.to_string())
-            .with_evidence(CLIENT, SEALED)
-            .with_proof(AP_REQ_PROOF, token);
+            .with_evidence(evidence::KERBEROS_CLIENT, SEALED)
+            .with_proof(evidence::KERBEROS_AP_REQ, token);
         if let Some(version) = request.key_version {
             claim = claim.with_evidence(KEY_VERSION, version.to_string());
         }
         if let Some(service) = ServicePrincipalName::parse(&claim.value) {
-            claim = claim.with_evidence(principal::SERVICE, service.to_string());
+            claim = claim.with_evidence(evidence::PRINCIPAL_SERVICE, service.to_string());
         }
 
         Ok(Some(claim))
@@ -126,7 +116,21 @@ impl TransportIdentifier for Kerberos {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ap_req::tests::{ap_req_for, kerberos_token, spnego_token};
+    use identify::kerberos::fixture;
+
+    /// An AP-REQ for a service of these components in `EXAMPLE.COM`, its
+    /// cipher naming the client as a real one would: nothing may find it.
+    fn ap_req_for(service: &[&str]) -> Vec<u8> {
+        fixture::ap_req(service, "EXAMPLE.COM", b"sealed:alice@EXAMPLE.COM")
+    }
+
+    fn kerberos_token() -> Vec<u8> {
+        fixture::kerberos(&ap_req_for(&["HTTP", "xmip.example"]))
+    }
+
+    fn spnego_token(mechanism_token: &[u8]) -> Vec<u8> {
+        fixture::spnego(mechanism_token)
+    }
     use stream::Stream;
     use xcore::{Established, Layer, StreamId};
 
@@ -139,7 +143,7 @@ mod tests {
     }
 
     fn negotiate_header() -> (String, Vec<(String, String)>) {
-        let token = STANDARD.encode(spnego_token(&kerberos_token()));
+        let token = codec::base64::encode(&spnego_token(&kerberos_token()));
         let facts = authorization(format!("Negotiate {token}"));
         (token, facts)
     }
@@ -156,7 +160,7 @@ mod tests {
         assert_eq!(claim.value, "HTTP/xmip.example@EXAMPLE.COM");
         assert_eq!(claim.established, Established::Passed);
         assert_eq!(claim.layer(), Layer::Transport);
-        assert_eq!(claim.proof(AP_REQ_PROOF), Some(token.as_str()));
+        assert_eq!(claim.proof(evidence::KERBEROS_AP_REQ), Some(token.as_str()));
         for (name, value) in [
             (REALM, "EXAMPLE.COM"),
             (SERVICE, "HTTP/xmip.example"),
@@ -183,7 +187,7 @@ mod tests {
         assert!(
             claim
                 .evidence
-                .contains(&(CLIENT.to_string(), SEALED.to_string()))
+                .contains(&(evidence::KERBEROS_CLIENT.to_string(), SEALED.to_string()))
         );
         let printed = format!("{claim:?}");
         assert!(!printed.contains("alice"), "nothing read the sealed part");
@@ -192,7 +196,7 @@ mod tests {
 
     fn presented_for(service: &[&str]) -> Presented {
         let stream = stream();
-        let token = STANDARD.encode(ap_req_for(service));
+        let token = codec::base64::encode(&ap_req_for(service));
         let facts = authorization(format!("Negotiate {token}"));
         let arrival = StreamArrival::new(&stream, Arriving::Pushed, "https://xmip/in", &facts);
 
@@ -208,14 +212,14 @@ mod tests {
             "as the ticket"
         );
         assert!(claim.evidence.contains(&(
-            principal::SERVICE.to_string(),
+            evidence::PRINCIPAL_SERVICE.to_string(),
             "HTTP/xmip.example@example.com".to_string()
         )));
         assert!(
             claim
                 .evidence
                 .iter()
-                .all(|(name, _)| name != principal::USER),
+                .all(|(name, _)| name != evidence::PRINCIPAL_USER),
             "the client principal is sealed"
         );
     }
@@ -225,18 +229,15 @@ mod tests {
         let claim = presented_for(&["xmip"]);
 
         assert_eq!(claim.value, "xmip@EXAMPLE.COM");
-        assert!(
-            claim
-                .evidence
-                .iter()
-                .all(|(name, _)| name != principal::SERVICE && name != principal::USER)
-        );
+        assert!(claim.evidence.iter().all(
+            |(name, _)| name != evidence::PRINCIPAL_SERVICE && name != evidence::PRINCIPAL_USER
+        ));
     }
 
     #[test]
     fn an_ntlm_negotiate_and_another_scheme_and_no_header_present_nothing() {
         let stream = stream();
-        let ntlm = STANDARD.encode(b"NTLMSSP\0\x03\0\0\0");
+        let ntlm = codec::base64::encode(b"NTLMSSP\0\x03\0\0\0");
 
         for facts in [
             authorization(format!("Negotiate {ntlm}")),
@@ -261,7 +262,7 @@ mod tests {
 
         let mut cut = spnego_token(&kerberos_token());
         cut.truncate(60);
-        let facts = authorization(format!("negotiate {}", STANDARD.encode(cut)));
+        let facts = authorization(format!("negotiate {}", codec::base64::encode(&cut)));
         let arrival = StreamArrival::new(&stream, Arriving::Pushed, "https://xmip/in", &facts);
         let failure = Kerberos.identify(&arrival).expect_err("truncated");
         assert!(
