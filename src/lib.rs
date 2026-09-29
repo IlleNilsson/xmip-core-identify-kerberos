@@ -242,7 +242,7 @@ mod tests {
 
         for facts in [
             authorization(format!("Negotiate {ntlm}")),
-            authorization("Basic cGFydG5lci14OnMzY3IzdA==".to_string()),
+            authorization("Basic cGFydHkteDpzM2NyM3Q=".to_string()),
             authorization("Negotiate".to_string()),
             Vec::new(),
         ] {
@@ -278,8 +278,7 @@ mod tests {
     fn a_scheduled_pickup_presents_nothing_because_the_ticket_was_xmips_own() {
         let stream = stream();
         let (_, facts) = negotiate_header();
-        let arrival =
-            StreamArrival::new(&stream, Arriving::Scheduled, "https://partner/out", &facts);
+        let arrival = StreamArrival::new(&stream, Arriving::Scheduled, "https://party/out", &facts);
 
         assert!(Kerberos.identify(&arrival).expect("read").is_none());
     }
