@@ -132,12 +132,7 @@ mod tests {
     fn spnego_token(mechanism_token: &[u8]) -> Vec<u8> {
         fixture::spnego(mechanism_token)
     }
-    use stream::Stream;
-    use xcore::{Established, Layer, StreamId};
-
-    fn stream() -> Stream {
-        Stream::new(StreamId::new(1), b"<order/>".to_vec(), None)
-    }
+    use xcore::{Established, Layer};
 
     fn authorization(value: String) -> Vec<(String, String)> {
         vec![(HTTP_AUTHORIZATION.to_string(), value)]
@@ -151,9 +146,8 @@ mod tests {
 
     #[test]
     fn a_negotiate_ticket_is_presented_by_the_service_it_is_for_with_the_token_as_proof() {
-        let stream = stream();
         let (token, facts) = negotiate_header();
-        let arrival = StreamArrival::new(&stream, Arriving::Pushed, "https://xmip/in", &facts);
+        let arrival = StreamArrival::new(Arriving::Pushed, "https://xmip/in", &facts);
 
         let claim = Kerberos.identify(&arrival).expect("read").expect("a claim");
 
@@ -179,9 +173,8 @@ mod tests {
 
     #[test]
     fn the_client_principal_is_sealed_and_the_record_says_so_rather_than_guessing() {
-        let stream = stream();
         let (token, facts) = negotiate_header();
-        let arrival = StreamArrival::new(&stream, Arriving::Pushed, "https://xmip/in", &facts);
+        let arrival = StreamArrival::new(Arriving::Pushed, "https://xmip/in", &facts);
 
         let claim = Kerberos.identify(&arrival).expect("read").expect("a claim");
 
@@ -196,10 +189,9 @@ mod tests {
     }
 
     fn presented_for(service: &[&str]) -> Presented {
-        let stream = stream();
         let token = codec::base64::encode(&ap_req_for(service));
         let facts = authorization(format!("Negotiate {token}"));
-        let arrival = StreamArrival::new(&stream, Arriving::Pushed, "https://xmip/in", &facts);
+        let arrival = StreamArrival::new(Arriving::Pushed, "https://xmip/in", &facts);
 
         Kerberos.identify(&arrival).expect("read").expect("a claim")
     }
@@ -237,7 +229,6 @@ mod tests {
 
     #[test]
     fn an_ntlm_negotiate_and_another_scheme_and_no_header_present_nothing() {
-        let stream = stream();
         let ntlm = codec::base64::encode(b"NTLMSSP\0\x03\0\0\0");
 
         for facts in [
@@ -246,7 +237,7 @@ mod tests {
             authorization("Negotiate".to_string()),
             Vec::new(),
         ] {
-            let arrival = StreamArrival::new(&stream, Arriving::Pushed, "https://xmip/in", &facts);
+            let arrival = StreamArrival::new(Arriving::Pushed, "https://xmip/in", &facts);
 
             assert!(Kerberos.identify(&arrival).expect("read").is_none());
         }
@@ -254,17 +245,15 @@ mod tests {
 
     #[test]
     fn a_token_that_is_not_base64_or_not_a_ticket_is_an_error_naming_why() {
-        let stream = stream();
-
         let facts = authorization("Negotiate not*base64".to_string());
-        let arrival = StreamArrival::new(&stream, Arriving::Pushed, "https://xmip/in", &facts);
+        let arrival = StreamArrival::new(Arriving::Pushed, "https://xmip/in", &facts);
         let failure = Kerberos.identify(&arrival).expect_err("not base64");
         assert_eq!(failure.to_string(), "the Negotiate token is not base64");
 
         let mut cut = spnego_token(&kerberos_token());
         cut.truncate(60);
         let facts = authorization(format!("negotiate {}", codec::base64::encode(&cut)));
-        let arrival = StreamArrival::new(&stream, Arriving::Pushed, "https://xmip/in", &facts);
+        let arrival = StreamArrival::new(Arriving::Pushed, "https://xmip/in", &facts);
         let failure = Kerberos.identify(&arrival).expect_err("truncated");
         assert!(
             failure
@@ -276,9 +265,8 @@ mod tests {
 
     #[test]
     fn a_scheduled_pickup_presents_nothing_because_the_ticket_was_xmips_own() {
-        let stream = stream();
         let (_, facts) = negotiate_header();
-        let arrival = StreamArrival::new(&stream, Arriving::Scheduled, "https://party/out", &facts);
+        let arrival = StreamArrival::new(Arriving::Scheduled, "https://party/out", &facts);
 
         assert!(Kerberos.identify(&arrival).expect("read").is_none());
     }
